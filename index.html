@@ -2,864 +2,504 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Beam Messenger</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Messenger</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-        }
-        // Установка темы до загрузки страницы во избежание мерцания
-        if (localStorage.getItem('beam_theme') === 'dark' || (!('beam_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Подключение Firebase для работы через интернет -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-        body { font-family: 'Inter', sans-serif; }
-        
-        .custom-scroll::-webkit-scrollbar { width: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 10px; }
-        
-        .message-enter { animation: slideIn 0.2s ease-out forwards; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* Glassmorphism for Beam Splash */
-        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        
-        /* Floating animations for Splash */
-        .float-1 { animation: float 6s ease-in-out infinite; }
-        .float-2 { animation: float 8s ease-in-out infinite reverse; }
-        @keyframes float { 0% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-20px) rotate(2deg); } 100% { transform: translateY(0px) rotate(0deg); } }
-        
-        /* Custom User Theme Styles */
-        .user-custom-theme {
-            --user-bg: #1a202c;
-            --user-text: #ffffff;
-            --user-font: 'Inter', sans-serif;
+        body { transition: background-color 0.3s, color 0.3s; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
-        .user-custom-theme body,
-        .user-custom-theme #sidebar,
-        .user-custom-theme #main-area,
-        .user-custom-theme .bg-white,
-        .user-custom-theme .bg-gray-50,
-        .user-custom-theme .bg-gray-100,
-        .user-custom-theme .dark\:bg-gray-900,
-        .user-custom-theme .dark\:bg-gray-800 {
-            background-color: var(--user-bg) !important;
+        .dark .glass-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .user-custom-theme body,
-        .user-custom-theme p,
-        .user-custom-theme h1,
-        .user-custom-theme h2,
-        .user-custom-theme h3,
-        .user-custom-theme h4,
-        .user-custom-theme span,
-        .user-custom-theme div,
-        .user-custom-theme input,
-        .user-custom-theme select,
-        .user-custom-theme .text-gray-800,
-        .user-custom-theme .text-gray-900,
-        .user-custom-theme .dark\:text-white,
-        .user-custom-theme .dark\:text-gray-100,
-        .user-custom-theme .dark\:text-gray-200,
-        .user-custom-theme .text-gray-500,
-        .user-custom-theme .dark\:text-gray-400 {
-            color: var(--user-text) !important;
-        }
-        .user-custom-theme * {
-            font-family: var(--user-font) !important;
-            border-color: rgba(128,128,128,0.3) !important;
-        }
-        /* Protect specific elements from being unreadable */
-        .user-custom-theme button.bg-indigo-600,
-        .user-custom-theme button.bg-indigo-600 * { color: #ffffff !important; }
-        .user-custom-theme .message-enter > div.justify-end > div > div { color: #ffffff !important; }
+        /* Кастомные шрифты */
+        .font-comic { font-family: "Comic Sans MS", cursive, sans-serif; }
+        .font-mono { font-family: monospace; }
+        .font-serif { font-family: Georgia, serif; }
     </style>
 </head>
-<body class="text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+<body class="bg-gray-100 text-gray-900 h-screen overflow-hidden dark:bg-gray-900 dark:text-white" id="app-body">
 
-    <div id="splash-screen" class="fixed inset-0 z-[200] bg-[#0b0f19] flex items-center justify-center overflow-hidden transition-opacity duration-500">
-        <!-- Abstract Background Elements -->
-        <div class="absolute inset-0 pointer-events-none opacity-60">
-            <div class="absolute top-[20%] right-[10%] w-72 h-48 bg-blue-500/20 rounded-2xl blur-xl transform rotate-12 float-1"></div>
-            <div class="absolute bottom-[20%] right-[25%] w-64 h-40 bg-purple-500/20 rounded-2xl blur-xl transform -rotate-12 float-2"></div>
-            <!-- Fake Glass Panels -->
-            <div class="absolute top-[25%] right-[15%] w-64 h-40 glass-card rounded-xl float-1 border-t border-l border-white/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-                <div class="p-4 flex flex-col gap-3">
-                    <div class="w-full h-2 bg-white/20 rounded"></div>
-                    <div class="flex items-end gap-2 h-16 mt-2">
-                        <div class="w-1/4 h-full bg-cyan-400/50 rounded-t"></div>
-                        <div class="w-1/4 h-3/4 bg-purple-400/50 rounded-t"></div>
-                        <div class="w-1/4 h-1/2 bg-blue-400/50 rounded-t"></div>
-                        <div class="w-1/4 h-full bg-indigo-400/50 rounded-t"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="absolute bottom-[30%] right-[5%] w-72 h-32 glass-card rounded-xl float-2 border-t border-l border-white/20 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center px-4 gap-4">
-                <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500"></div>
-                <div class="flex-1 space-y-2">
-                    <div class="w-full h-3 bg-white/20 rounded"></div>
-                    <div class="w-2/3 h-3 bg-white/10 rounded"></div>
-                </div>
-            </div>
+    <!-- ЭКРАН ОШИБКИ, ЕСЛИ НЕТ КЛЮЧЕЙ -->
+    <div id="no-db-screen" class="fixed inset-0 bg-gray-900 z-[100] flex items-center justify-center hidden">
+        <div class="bg-gray-800 p-8 rounded-2xl max-w-lg text-white border border-red-500 shadow-2xl">
+            <h2 class="text-2xl font-bold text-red-400 mb-4"><i class="fas fa-exclamation-triangle"></i> База данных не подключена</h2>
+            <p class="mb-4 text-gray-300">Чтобы вы могли находить друзей через интернет, вам нужно вставить ключи Firebase в файл index.html.</p>
+            <p class="mb-2 text-sm text-gray-400">Найдите в коде строку <b>const firebaseConfig</b> и заполните её вашими данными с сайта firebase.google.com.</p>
         </div>
+    </div>
 
-        <!-- Main Splash Card -->
-        <div class="relative z-10 glass-card p-10 md:p-14 rounded-3xl text-white shadow-2xl max-w-lg w-[90%] md:w-full ml-4 md:ml-20 mr-auto flex flex-col justify-center">
-            <h1 class="text-6xl md:text-7xl font-extrabold mb-4 tracking-tight">Beam</h1>
-            <p class="text-lg md:text-xl text-gray-300 mb-8 font-light leading-relaxed">
-                Innovate. Create. Elevate.<br>
-                Digital solutions for your business
-            </p>
-            <div>
-                <button id="get-started-btn" class="bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-white font-bold py-3 px-8 rounded-full shadow-[0_0_20px_rgba(56,189,248,0.4)] hover:shadow-[0_0_30px_rgba(56,189,248,0.6)] transition-all transform hover:scale-105 active:scale-95 text-lg">
+    <!-- ЗАСТАВКА BEAM -->
+    <div id="splash-screen" class="fixed inset-0 z-50 bg-[#0f111a] flex items-center justify-center overflow-hidden">
+        <div class="relative w-full max-w-5xl h-[600px] flex items-center p-12">
+            <div class="z-10 w-1/2">
+                <h1 class="text-8xl font-bold text-white mb-4 tracking-tighter" style="text-shadow: 0 4px 20px rgba(255,255,255,0.2);">Beam</h1>
+                <p class="text-2xl text-gray-300 mb-8 font-light">Innovate. Create. Elevate.<br>Digital solutions for your business</p>
+                <button id="get-started-btn" class="relative z-50 bg-gradient-to-r from-cyan-400 to-blue-500 text-white font-bold text-xl py-4 px-10 rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(59,130,246,0.6)]">
                     Get Started
                 </button>
             </div>
-        </div>
-    </div>
-
-    <!-- Login Screen -->
-    <div id="login-screen" class="hidden fixed inset-0 z-[150] flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 px-4 transition-opacity duration-300">
-        <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-8 max-w-sm w-full text-center">
-            <div class="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg class="h-10 w-10 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
+            <!-- Декоративные панели -->
+            <div class="absolute right-10 top-1/2 -translate-y-1/2 w-1/2 h-full pointer-events-none">
+                <div class="absolute top-20 right-20 w-80 h-48 glass-panel rounded-2xl transform rotate-6 border-cyan-400/30"></div>
+                <div class="absolute top-40 right-40 w-96 h-64 glass-panel rounded-2xl transform -rotate-3 border-purple-500/30 shadow-[0_0_50px_rgba(168,85,247,0.2)]"></div>
             </div>
-            <h1 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">Создать профиль</h1>
-            <p class="text-gray-500 dark:text-gray-400 mb-6 text-sm">Введите никнейм, чтобы начать общение</p>
-            
-            <form id="login-form" class="space-y-4">
-                <input type="text" id="nickname-input" required placeholder="Ваш никнейм" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white" autocomplete="off" maxlength="20">
-                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-xl transition-colors shadow-md">
-                    Войти
-                </button>
-                <p id="login-error" class="text-red-500 text-sm hidden mt-2"></p>
-            </form>
         </div>
     </div>
 
-    <!-- Main App Screen -->
-    <div id="app-screen" class="hidden fixed inset-0 flex bg-white dark:bg-gray-900 z-40">
-        
-        <!-- Sidebar -->
-        <div id="sidebar" class="w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col bg-white dark:bg-gray-900 transition-all h-full z-20">
-            <!-- Header -->
-            <div class="px-4 h-16 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-900 flex-shrink-0">
-                <button id="open-profile-btn" class="flex items-center space-x-3 hover:bg-gray-200 dark:hover:bg-gray-800 p-1.5 -ml-1.5 rounded-lg transition-colors flex-1 min-w-0 mr-2 text-left">
-                    <div id="my-avatar" class="w-9 h-9 bg-indigo-500 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0"></div>
-                    <span id="my-name" class="font-semibold text-gray-700 dark:text-gray-200 truncate"></span>
-                </button>
-                <div class="flex space-x-1 flex-shrink-0">
-                    <!-- Theme Toggle Btn -->
-                    <button id="btn-theme-toggle" class="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 p-2 rounded-full" title="Сменить тему">
-                        <svg id="icon-sun" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                        </svg>
-                        <svg id="icon-moon" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                        </svg>
-                    </button>
-                    <!-- Group Btn -->
-                    <button id="btn-create-group" class="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 p-2 rounded-full" title="Новая группа">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                    </button>
-                    <!-- Friend Btn -->
-                    <button id="btn-add-friend" class="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 p-2 rounded-full" title="Добавить друга">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                    </button>
+    <!-- ОКНО АВТОРИЗАЦИИ -->
+    <div id="auth-screen" class="fixed inset-0 z-40 bg-gray-100 dark:bg-gray-900 flex items-center justify-center hidden transition-colors duration-300">
+        <div class="bg-white dark:bg-gray-800 p-10 rounded-3xl shadow-xl w-96 text-center border dark:border-gray-700">
+            <div class="w-20 h-20 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-600 dark:text-blue-400 text-3xl">
+                <i class="fas fa-paper-plane"></i>
+            </div>
+            <h1 class="text-2xl font-bold mb-2">Web Messenger</h1>
+            <p class="text-gray-500 dark:text-gray-400 mb-6 text-sm">Придумайте уникальный никнейм</p>
+            <input type="text" id="username-input" placeholder="Ваш никнейм..." class="w-full px-4 py-3 border dark:border-gray-600 dark:bg-gray-700 rounded-xl mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="login()" class="w-full bg-blue-600 text-white py-3 rounded-xl font-medium hover:bg-blue-700 transition">Войти</button>
+            <p id="auth-error" class="text-red-500 mt-4 text-sm hidden"></p>
+        </div>
+    </div>
+
+    <!-- ГЛАВНЫЙ ИНТЕРФЕЙС -->
+    <div id="main-app" class="hidden h-screen flex">
+        <!-- Боковая панель -->
+        <div class="w-1/3 border-r dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col transition-colors duration-300">
+            <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                <div class="flex items-center cursor-pointer" onclick="openProfile()">
+                    <div id="my-avatar" class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm"></div>
+                    <span id="my-name-display" class="ml-3 font-semibold"></span>
                 </div>
+                <div class="flex gap-3">
+                    <button onclick="toggleTheme()" class="text-gray-500 hover:text-blue-600 text-xl"><i class="fas fa-moon"></i></button>
+                    <button onclick="openModal('add-friend-modal')" class="text-gray-500 hover:text-blue-600 text-xl"><i class="fas fa-user-plus"></i></button>
+                </div>
+            </div>
+            <div id="chat-list" class="flex-1 overflow-y-auto"></div>
+        </div>
+
+        <!-- Область чата -->
+        <div class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+            <div id="chat-header" class="p-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" onclick="openSettings()">
+                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold" id="current-chat-avatar"></div>
+                <span class="ml-3 font-semibold text-lg" id="current-chat-name">Выберите чат</span>
             </div>
             
-            <!-- Chat List -->
-            <div id="chats-list" class="flex-1 overflow-y-auto custom-scroll flex flex-col pb-4">
-                <!-- Chats rendered here via JS -->
-            </div>
-            <div id="chats-empty" class="hidden flex-col items-center justify-center p-8 text-center h-full">
-                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
-                    <svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/></svg>
-                </div>
-                <p class="text-gray-500 dark:text-gray-400 font-medium">Нет чатов</p>
-                <p class="text-gray-400 text-sm mt-1">Добавьте друга, чтобы начать.</p>
-            </div>
-        </div>
-
-        <div id="main-area" class="hidden md:flex flex-1 flex-col bg-[#e5ddd5] dark:bg-[#0b141a] relative z-10 w-full h-full transition-colors duration-200">
-            <div class="absolute inset-0 z-0 opacity-[0.06] pointer-events-none" style="background-image: url('https://www.transparenttextures.com/patterns/az-subtle.png');"></div>
+            <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
             
-            <!-- Placeholder -->
-            <div id="global-empty" class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white dark:bg-[#0b141a]">
-                <div class="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-full mb-4">
-                    <svg class="h-12 w-12 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                </div>
-                <h3 class="text-xl font-medium text-gray-700 dark:text-gray-300">Выберите чат</h3>
-            </div>
-
-            <!-- Active Chat -->
-            <div id="active-chat" class="hidden flex-1 flex-col h-full z-10 relative">
-                
-                <!-- Chat Header (Clickable for Settings) -->
-                <button id="chat-header-btn" class="h-16 px-4 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center shadow-sm w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0 z-20">
-                    <div id="back-to-chats-btn" class="md:hidden mr-3 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 flex-shrink-0" title="Назад">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-                    </div>
-                    <div id="active-avatar" class="w-10 h-10 rounded-full bg-indigo-500 bg-cover bg-center flex items-center justify-center text-white font-bold mr-3 flex-shrink-0 shadow-sm overflow-hidden"></div>
-                    <div class="flex-1 min-w-0">
-                        <h2 id="active-name" class="font-semibold text-gray-800 dark:text-gray-100 truncate text-lg">Chat</h2>
-                        <p id="active-type" class="text-xs text-gray-500 dark:text-gray-400">Нажмите для настроек</p>
-                    </div>
-                </button>
-
-                <!-- Messages -->
-                <div id="messages-container" class="flex-1 overflow-y-auto p-4 custom-scroll flex flex-col space-y-3 z-10 relative h-0">
-                    <!-- Messages go here -->
-                </div>
-
-                <!-- Input area -->
-                <div class="bg-gray-100 dark:bg-gray-900 p-3 flex-shrink-0 z-20 transition-colors">
-                    <form id="message-form" class="flex items-center space-x-2 w-full max-w-4xl mx-auto">
-                        <input type="text" id="message-input" placeholder="Написать сообщение..." class="flex-1 bg-white dark:bg-gray-800 rounded-full px-5 py-3 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 dark:text-gray-100 shadow-sm min-w-0 transition-colors" autocomplete="off">
-                        <button type="submit" id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-md transition-transform transform hover:scale-105 flex-shrink-0 focus:outline-none">
-                            <svg class="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                        </button>
-                    </form>
+            <div id="message-input-area" class="p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 hidden">
+                <div class="flex gap-2">
+                    <input type="text" id="message-input" placeholder="Написать сообщение..." class="flex-1 px-4 py-3 border dark:border-gray-600 dark:bg-gray-700 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button onclick="sendMessage()" class="bg-blue-600 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-blue-700 transition shadow-md"><i class="fas fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Profile Modal -->
-    <div id="modal-profile" class="hidden fixed inset-0 z-[200] flex items-center justify-center px-4 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm transition-opacity">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full p-6 text-center relative transition-colors max-h-[90vh] overflow-y-auto custom-scroll">
-            <button class="close-modal absolute top-4 right-4 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <div id="prof-avatar" class="w-24 h-24 mx-auto rounded-full bg-indigo-500 flex items-center justify-center text-white text-4xl font-bold shadow-lg mb-4 mt-2"></div>
-            <h2 id="prof-name" class="text-2xl font-bold text-gray-800 dark:text-white mb-2 truncate">Name</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Ваш уникальный никнейм. Отправьте его другу, чтобы он мог добавить вас.</p>
+    <!-- Модальное окно: Добавить друга -->
+    <div id="add-friend-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl w-96 text-gray-900 dark:text-white border dark:border-gray-700">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Добавить друга</h2>
+                <button onclick="closeModal('add-friend-modal')" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"><i class="fas fa-times"></i></button>
+            </div>
+            <input type="text" id="friend-username" placeholder="Введите никнейм друга" class="w-full px-4 py-2 border dark:border-gray-600 dark:bg-gray-700 rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p id="add-friend-error" class="text-red-500 text-sm mb-4 hidden"></p>
+            <button onclick="addFriend()" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">Добавить</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно: Профиль и Внешний вид -->
+    <div id="profile-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl w-96 text-gray-900 dark:text-white border dark:border-gray-700">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Мой профиль</h2>
+                <button onclick="closeModal('profile-modal')" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"><i class="fas fa-times"></i></button>
+            </div>
             
-            <div class="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-between text-left mb-6">
-                <div class="truncate mr-2">
-                    <span class="text-xs text-gray-400 block">Никнейм:</span>
-                    <span id="prof-nick" class="font-mono text-gray-800 dark:text-gray-200 font-bold select-all"></span>
-                </div>
-                <button id="btn-copy-nick" class="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 transition-colors">
-                    <svg id="icon-copy" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    <svg id="icon-copied" class="h-5 w-5 text-green-600 dark:text-green-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
-                </button>
-            </div>
-
-            <!-- Custom Theme Section -->
-            <div class="text-left border-t border-gray-200 dark:border-gray-700 pt-4">
-                <h3 class="text-lg font-bold text-gray-800 dark:text-white mb-3">Внешний вид</h3>
-                <div class="space-y-3">
-                    <label class="flex items-center justify-between cursor-pointer">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Включить свою тему</span>
-                        <input type="checkbox" id="theme-enable" class="w-5 h-5 text-indigo-600 rounded outline-none cursor-pointer">
-                    </label>
-                    <div id="custom-theme-controls" class="space-y-3 hidden transition-all bg-gray-50 dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm text-gray-600 dark:text-gray-400">Цвет фона</span>
-                            <input type="color" id="theme-bg" class="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent">
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm text-gray-600 dark:text-gray-400">Цвет текста</span>
-                            <input type="color" id="theme-text" class="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent">
-                        </div>
-                        <div>
-                            <span class="text-sm text-gray-600 dark:text-gray-400 block mb-1">Шрифт</span>
-                            <select id="theme-font" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg text-sm outline-none">
-                                <option value="'Inter', sans-serif">Стандартный (Inter)</option>
-                                <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans (Веселый)</option>
-                                <option value="'Courier New', Courier, monospace">Courier (Моноширинный)</option>
-                                <option value="'Times New Roman', Times, serif">Times New Roman (С засечками)</option>
-                                <option value="Arial, Helvetica, sans-serif">Arial</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button id="btn-save-theme" class="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg transition-colors text-sm font-medium shadow-md">Сохранить тему</button>
+            <div class="text-center mb-6">
+                <div class="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center text-white text-4xl font-bold mx-auto mb-2 shadow-lg" id="profile-avatar-big"></div>
+                <h3 class="text-2xl font-bold" id="profile-name-big"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Скопируйте ваш ник и отправьте другу:</p>
+                <div class="flex mt-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-2 items-center justify-between">
+                    <span id="profile-copy-name" class="font-mono text-blue-600 dark:text-blue-400 font-bold ml-2"></span>
+                    <button onclick="copyMyName()" class="bg-blue-600 text-white px-3 py-1 rounded-md text-sm"><i class="fas fa-copy"></i></button>
                 </div>
             </div>
 
-        </div>
-    </div>
-
-    <!-- Generic Input Modal (For Friend / Group) -->
-    <div id="modal-input" class="hidden fixed inset-0 z-[200] flex items-center justify-center px-4 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm transition-opacity">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full p-6 relative transition-colors">
-            <button class="close-modal absolute top-4 right-4 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <h3 id="modal-input-title" class="text-lg font-bold text-gray-800 dark:text-white mb-4">Title</h3>
-            <form id="modal-input-form">
-                <input type="text" id="modal-input-field" required class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none mb-2">
-                <p id="modal-input-error" class="text-red-500 text-sm hidden mb-4">Error</p>
-                <button type="submit" id="modal-input-submit" class="w-full mt-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700">Сохранить</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Chat Settings Modal -->
-    <div id="modal-settings" class="hidden fixed inset-0 z-[200] flex items-center justify-center px-4 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm transition-opacity">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full p-6 relative transition-colors">
-            <button class="close-modal absolute top-4 right-4 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <h3 class="text-lg font-bold text-gray-800 dark:text-white mb-4">Настройки чата</h3>
-            <form id="settings-form" class="space-y-4">
-                <div id="settings-name-container">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Название (только для групп)</label>
-                    <input type="text" id="set-name" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+            <hr class="my-4 border-gray-200 dark:border-gray-700">
+            <h3 class="font-bold mb-3"><i class="fas fa-paint-brush"></i> Внешний вид приложения</h3>
+            
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center">
+                    <span>Шрифт:</span>
+                    <select id="font-selector" onchange="applyCustomStyles()" class="bg-gray-100 dark:bg-gray-700 p-1 rounded border dark:border-gray-600">
+                        <option value="font-sans">Стандартный</option>
+                        <option value="font-comic">Веселый (Comic)</option>
+                        <option value="font-mono">Код (Mono)</option>
+                        <option value="font-serif">Строгий (Serif)</option>
+                    </select>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">URL фото профиля (необязательно)</label>
-                    <input type="url" id="set-photo" placeholder="https://..." class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
+                <div class="flex justify-between items-center">
+                    <span>Цвет ваших сообщений:</span>
+                    <input type="color" id="my-msg-color" value="#3b82f6" onchange="applyCustomStyles()" class="w-8 h-8 rounded cursor-pointer">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Цвет ваших сообщений</label>
-                    <div class="flex items-center space-x-3">
-                        <input type="color" id="set-color" value="#4f46e5" class="w-10 h-10 rounded cursor-pointer border-0 p-0 bg-transparent">
-                        <span class="text-sm text-gray-500 dark:text-gray-400">Выберите цвет для облачка текста</span>
-                    </div>
-                </div>
-                <button type="submit" class="w-full py-2 mt-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700">Сохранить</button>
-            </form>
+            </div>
         </div>
     </div>
 
     <script>
-        // Theme Engine
-        const htmlEl = document.documentElement;
-        const themeBtn = document.getElementById('btn-theme-toggle');
-        const iconSun = document.getElementById('icon-sun');
-        const iconMoon = document.getElementById('icon-moon');
+<script>
+const firebaseConfig = {
+    apiKey: "AIzaSyDWbOCZ...",
+    authDomain: "web-messenger-6eb01.firebaseapp.com",
+    projectId: "web-messenger-6eb01",
+    storageBucket: "web-messenger-6eb01.firebasestorage.app",
+    messagingSenderId: "876215536083",
+    appId: "1:876215536083:web:191e...",
+    measurementId: "G-GXN4F54Z9B"
+};
 
-        function updateThemeIcons() {
-            if (htmlEl.classList.contains('dark')) {
-                iconSun.classList.remove('hidden');
-                iconMoon.classList.add('hidden');
-            } else {
-                iconSun.classList.add('hidden');
-                iconMoon.classList.remove('hidden');
-            }
-        }
-        updateThemeIcons();
+ const firebaseConfig = {
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: ""
+};
 
-        themeBtn.addEventListener('click', () => {
-            htmlEl.classList.toggle('dark');
-            const isDark = htmlEl.classList.contains('dark');
-            localStorage.setItem('beam_theme', isDark ? 'dark' : 'light');
-            updateThemeIcons();
-        });
-
-        // Custom Appearance Engine
-        const APP_THEME_KEY = 'beam_custom_appearance';
-        
-        function loadAppearance() {
-            try {
-                const settings = JSON.parse(localStorage.getItem(APP_THEME_KEY));
-                applyAppearanceStyles(settings);
-                return settings;
-            } catch(e) { return null; }
+        // Проверка наличия ключей
+        if (!firebaseConfig.apiKey) {
+            document.getElementById('no-db-screen').classList.remove('hidden');
+        } else {
+            // Инициализация базы данных
+            firebase.initializeApp(firebaseConfig);
+            window.db = firebase.firestore();
         }
 
-        function applyAppearanceStyles(settings) {
-            const root = document.documentElement;
-            if (settings && settings.enabled) {
-                root.style.setProperty('--user-bg', settings.bg);
-                root.style.setProperty('--user-text', settings.text);
-                root.style.setProperty('--user-font', settings.font);
-                root.classList.add('user-custom-theme');
-            } else {
-                root.classList.remove('user-custom-theme');
-            }
-        }
-        
-        // Initial load
-        loadAppearance();
-
-        // Data Engine (LocalStorage)
-        const DB_KEY = 'beam_messenger_db_v2';
-        
-        function getDB() {
-            try {
-                const data = localStorage.getItem(DB_KEY);
-                return data ? JSON.parse(data) : { users: {}, chats: {}, messages: {} };
-            } catch (e) {
-                return { users: {}, chats: {}, messages: {} };
-            }
-        }
-        
-        function saveDB(db) {
-            localStorage.setItem(DB_KEY, JSON.stringify(db));
-            window.dispatchEvent(new Event('db_updated')); // Trigger local sync
-        }
-
-        // State
-        let me = null;
+        // ==========================================
+        // 2. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+        // ==========================================
+        let currentUser = localStorage.getItem('chatUser');
         let currentChatId = null;
-        
-        // DOM Elements
-        const splash = document.getElementById('splash-screen');
-        const loginScreen = document.getElementById('login-screen');
-        const appScreen = document.getElementById('app-screen');
-        const sidebar = document.getElementById('sidebar');
-        const mainArea = document.getElementById('main-area');
-        const chatsList = document.getElementById('chats-list');
-        const messagesContainer = document.getElementById('messages-container');
-        const msgForm = document.getElementById('message-form');
-        const msgInput = document.getElementById('message-input');
+        let myCustomColor = localStorage.getItem('myMsgColor') || '#3b82f6';
+        let myCustomFont = localStorage.getItem('myFont') || 'font-sans';
+        let unsubscribeMessages = null;
 
-        // Modals Logic
-        const modals = document.querySelectorAll('.fixed.inset-0.z-\\[200\\]:not(#splash-screen)');
-        const closeBtns = document.querySelectorAll('.close-modal');
-        
-        function hideAllModals() {
-            modals.forEach(m => m.classList.add('hidden'));
-        }
-        closeBtns.forEach(btn => btn.addEventListener('click', hideAllModals));
-        modals.forEach(m => m.addEventListener('click', (e) => { if(e.target === m) hideAllModals(); }));
-
-        // Init
+        // ==========================================
+        // 3. ЛОГИКА ЗАСТАВКИ И АВТОРИЗАЦИИ
+        // ==========================================
         document.getElementById('get-started-btn').addEventListener('click', () => {
-            splash.classList.add('opacity-0');
-            setTimeout(() => {
-                splash.classList.add('hidden');
-                
-                // Check auth
-                const savedUid = localStorage.getItem('beam_uid');
-                if (savedUid) {
-                    const db = getDB();
-                    if (db.users[savedUid]) {
-                        me = db.users[savedUid];
-                        startApp();
-                        return;
-                    }
-                }
-                // Show login
-                loginScreen.classList.remove('hidden');
-            }, 500);
-        });
-
-        document.getElementById('login-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const nick = document.getElementById('nickname-input').value.trim();
-            if (nick.length < 2) return;
-            
-            let db = getDB();
-            const uid = 'user_' + Date.now() + Math.random().toString(36).substr(2, 5);
-            me = { uid, nickname: nick, lower: nick.toLowerCase() };
-            
-            db.users[uid] = me;
-            saveDB(db);
-            localStorage.setItem('beam_uid', uid);
-            
-            loginScreen.classList.add('hidden');
-            startApp();
-        });
-
-        function startApp() {
-            appScreen.classList.remove('hidden');
-            
-            // Setup Profile Header
-            document.getElementById('my-name').textContent = me.nickname;
-            document.getElementById('my-avatar').textContent = me.nickname.charAt(0).toUpperCase();
-            
-            renderChats();
-        }
-
-        function renderChats() {
-            if (!me) return;
-            const db = getDB();
-            const myChats = Object.values(db.chats)
-                .filter(c => c.participants.includes(me.uid))
-                .sort((a, b) => b.createdAt - a.createdAt);
-            
-            chatsList.innerHTML = '';
-            document.getElementById('chats-empty').classList.toggle('hidden', myChats.length > 0);
-            
-            myChats.forEach(chat => {
-                const el = document.createElement('div');
-                const isSelected = chat.id === currentChatId;
-                
-                // Dynamic styling for dark/light mode
-                const normalClass = 'hover:bg-gray-50 dark:hover:bg-gray-800 border-l-4 border-l-transparent';
-                const selectedClass = 'bg-indigo-50 dark:bg-indigo-900/30 border-l-4 border-l-indigo-600';
-                el.className = `flex items-center px-4 py-3 cursor-pointer border-b border-gray-100 dark:border-gray-800 transition-colors ${isSelected ? selectedClass : normalClass}`;
-                
-                let title = 'Chat';
-                let sub = 'Group';
-                let initial = '?';
-                
-                if (chat.type === 'group') {
-                    title = chat.name || 'Группа';
-                    initial = title.charAt(0).toUpperCase();
-                } else {
-                    const otherId = chat.participants.find(p => p !== me.uid) || me.uid;
-                    const otherUser = db.users[otherId];
-                    title = otherUser ? otherUser.nickname : 'Unknown';
-                    initial = title.charAt(0).toUpperCase();
-                    sub = 'Личный чат';
-                }
-
-                // Avatar styling
-                let avatarStyle = `bg-gradient-to-br from-indigo-400 to-purple-500`;
-                let avatarContent = initial;
-                if (chat.avatar) {
-                    avatarStyle = `bg-cover bg-center`;
-                    avatarContent = '';
-                    el.innerHTML = `
-                        <div class="w-12 h-12 rounded-full ${avatarStyle} mr-3 shadow-sm flex-shrink-0" style="background-image: url('${chat.avatar}')"></div>
-                        <div class="flex-1 min-w-0">
-                            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">${escapeHtml(title)}</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">${sub}</p>
-                        </div>
-                    `;
-                } else {
-                    el.innerHTML = `
-                        <div class="w-12 h-12 rounded-full ${avatarStyle} flex items-center justify-center text-white font-bold text-lg mr-3 shadow-sm flex-shrink-0">
-                            ${avatarContent}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">${escapeHtml(title)}</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">${sub}</p>
-                        </div>
-                    `;
-                }
-                
-                el.addEventListener('click', () => selectChat(chat.id));
-                chatsList.appendChild(el);
-            });
-        }
-
-        function selectChat(id) {
-            currentChatId = id;
-            document.getElementById('global-empty').classList.add('hidden');
-            document.getElementById('active-chat').classList.remove('hidden');
-            document.getElementById('active-chat').classList.add('flex');
-            
-            // Mobile layout
-            sidebar.classList.add('max-md:hidden');
-            mainArea.classList.remove('hidden');
-            mainArea.classList.add('flex');
-            
-            renderChats(); // Update selection visual
-            
-            const db = getDB();
-            const chat = db.chats[id];
-            
-            let title = 'Chat';
-            if (chat.type === 'group') {
-                title = chat.name || 'Группа';
-            } else {
-                const otherId = chat.participants.find(p => p !== me.uid) || me.uid;
-                title = db.users[otherId] ? db.users[otherId].nickname : 'Unknown';
+            document.getElementById('splash-screen').style.display = 'none';
+            if (currentUser && firebaseConfig.apiKey) {
+                initApp();
+            } else if (firebaseConfig.apiKey) {
+                document.getElementById('auth-screen').classList.remove('hidden');
             }
-            
-            document.getElementById('active-name').textContent = title;
-            const av = document.getElementById('active-avatar');
-            if (chat.avatar) {
-                av.style.backgroundImage = `url('${chat.avatar}')`;
-                av.textContent = '';
-            } else {
-                av.style.backgroundImage = 'none';
-                av.textContent = title.charAt(0).toUpperCase();
-            }
-
-            renderMessages();
-            msgInput.focus();
-        }
-
-        // Back button (Mobile)
-        document.getElementById('back-to-chats-btn').addEventListener('click', (e) => {
-            e.stopPropagation(); // prevent opening settings
-            currentChatId = null;
-            sidebar.classList.remove('max-md:hidden');
-            mainArea.classList.add('hidden');
-            mainArea.classList.remove('flex');
-            document.getElementById('active-chat').classList.add('hidden');
-            document.getElementById('active-chat').classList.remove('flex');
-            document.getElementById('global-empty').classList.remove('hidden');
-            renderChats();
         });
 
-        function renderMessages() {
-            if (!currentChatId) return;
-            const db = getDB();
-            const msgs = db.messages[currentChatId] || [];
-            const chat = db.chats[currentChatId];
+        async function login() {
+            const username = document.getElementById('username-input').value.trim().toLowerCase();
+            const errorEl = document.getElementById('auth-error');
             
-            // Get custom color for current user
-            const myColor = (chat.settings && chat.settings[me.uid] && chat.settings[me.uid].color) ? chat.settings[me.uid].color : '#4f46e5';
-
-            messagesContainer.innerHTML = '';
-            if (msgs.length === 0) {
-                messagesContainer.innerHTML = '<div class="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500 mt-10"><span class="bg-white/50 dark:bg-gray-800/50 px-4 py-2 rounded-full text-sm">Здесь пока нет сообщений</span></div>';
+            if (username.length < 3) {
+                errorEl.textContent = 'Никнейм должен быть от 3 символов';
+                errorEl.classList.remove('hidden');
                 return;
             }
 
-            let lastId = null;
-            msgs.forEach(m => {
-                const isMe = m.senderId === me.uid;
-                const showHead = lastId !== m.senderId || !isMe;
-                
-                const wrap = document.createElement('div');
-                wrap.className = `flex w-full message-enter ${isMe ? 'justify-end' : 'justify-start'}`;
-                
-                const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-                let avatarHtml = `<div class="w-8 mr-2 flex-shrink-0"></div>`;
-                if (!isMe && showHead) {
-                    avatarHtml = `<div class="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold mr-2 mt-1 flex-shrink-0">${(m.senderName||'?').charAt(0).toUpperCase()}</div>`;
-                }
+            try {
+                // Регистрируем пользователя в базе
+                await db.collection('users').doc(username).set({
+                    username: username,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
 
-                // Dynamic coloring for dark/light mode
-                const style = isMe ? `background-color: ${myColor}; color: white;` : '';
-                const baseClasses = isMe ? 'text-white' : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100';
-                const rounded = isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm';
-                
-                let nameHtml = '';
-                if (!isMe && showHead) nameHtml = `<div class="text-xs font-bold text-indigo-500 dark:text-indigo-400 mb-1 ml-1">${escapeHtml(m.senderName)}</div>`;
-
-                wrap.innerHTML = `
-                    ${isMe ? '' : avatarHtml}
-                    <div class="flex flex-col max-w-[75%]">
-                        ${nameHtml}
-                        <div class="${rounded} px-4 py-2 shadow-sm relative break-words text-[15px] ${baseClasses}" style="${style}">
-                            <span>${escapeHtml(m.text)}</span>
-                            <div class="flex items-center justify-end mt-1 space-x-1 float-right ml-3 pt-1">
-                                <span class="text-[10px] opacity-70">${time}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                messagesContainer.appendChild(wrap);
-                lastId = m.senderId;
-            });
-            
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                localStorage.setItem('chatUser', username);
+                currentUser = username;
+                document.getElementById('auth-screen').classList.add('hidden');
+                initApp();
+            } catch (error) {
+                console.error(error);
+                errorEl.textContent = 'Ошибка подключения к базе';
+                errorEl.classList.remove('hidden');
+            }
         }
 
-        msgForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const text = msgInput.value.trim();
-            if (!text || !currentChatId) return;
+        // ==========================================
+        // 4. ЗАГРУЗКА ПРИЛОЖЕНИЯ И ДАННЫХ
+        // ==========================================
+        function initApp() {
+            document.getElementById('main-app').classList.remove('hidden');
+            document.getElementById('my-avatar').textContent = currentUser.substring(0, 2).toUpperCase();
+            document.getElementById('my-name-display').textContent = currentUser;
+            
+            applyTheme();
+            applyCustomStyles();
+            loadChats();
+        }
 
-            const db = getDB();
-            if (!db.messages[currentChatId]) db.messages[currentChatId] = [];
-            
-            db.messages[currentChatId].push({
-                id: 'msg_' + Date.now(),
-                text: text,
-                senderId: me.uid,
-                senderName: me.nickname,
-                timestamp: Date.now()
-            });
-            
-            saveDB(db); 
-            
-            msgInput.value = '';
-            msgInput.focus();
-        });
+        function loadChats() {
+            // Слушаем чаты, где мы участники
+            db.collection('chats').where('participants', 'array-contains', currentUser)
+              .onSnapshot(snapshot => {
+                  const chatList = document.getElementById('chat-list');
+                  chatList.innerHTML = '';
+                  
+                  snapshot.forEach(doc => {
+                      const chat = doc.data();
+                      const isGroup = chat.isGroup;
+                      
+                      // Вычисляем имя чата (если личный - имя друга)
+                      let chatName = chat.name;
+                      if (!isGroup) {
+                          const friend = chat.participants.find(p => p !== currentUser);
+                          chatName = friend || chat.name;
+                      }
+                      
+                      const avatarText = chatName.substring(0, 2).toUpperCase();
+                      
+                      const div = document.createElement('div');
+                      div.className = `p-4 border-b dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center transition ${currentChatId === doc.id ? 'bg-blue-50 dark:bg-gray-700' : ''}`;
+                      div.onclick = () => openChat(doc.id, chatName, avatarText);
+                      
+                      div.innerHTML = `
+                          <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold shadow-sm shrink-0">
+                              ${avatarText}
+                          </div>
+                          <div class="ml-4 overflow-hidden">
+                              <h3 class="font-bold text-gray-900 dark:text-white truncate">${chatName}</h3>
+                          </div>
+                      `;
+                      chatList.appendChild(div);
+                  });
+              });
+        }
 
-        let modalAction = null;
-        
-        document.getElementById('btn-add-friend').addEventListener('click', () => {
-            modalAction = 'friend';
-            document.getElementById('modal-input-title').textContent = 'Добавить друга';
-            document.getElementById('modal-input-field').placeholder = 'Точный никнейм друга';
-            document.getElementById('modal-input-error').classList.add('hidden');
-            document.getElementById('modal-input-field').value = '';
-            document.getElementById('modal-input').classList.remove('hidden');
-            setTimeout(() => document.getElementById('modal-input-field').focus(), 100);
-        });
-
-        document.getElementById('btn-create-group').addEventListener('click', () => {
-            modalAction = 'group';
-            document.getElementById('modal-input-title').textContent = 'Создать группу';
-            document.getElementById('modal-input-field').placeholder = 'Название группы';
-            document.getElementById('modal-input-error').classList.add('hidden');
-            document.getElementById('modal-input-field').value = '';
-            document.getElementById('modal-input').classList.remove('hidden');
-            setTimeout(() => document.getElementById('modal-input-field').focus(), 100);
-        });
-
-        document.getElementById('modal-input-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const val = document.getElementById('modal-input-field').value.trim();
-            const err = document.getElementById('modal-input-error');
-            if (!val) return;
+        // ==========================================
+        // 5. ДОБАВЛЕНИЕ ДРУГА И СОЗДАНИЕ ЧАТА
+        // ==========================================
+        async function addFriend() {
+            const friendName = document.getElementById('friend-username').value.trim().toLowerCase();
+            const errorEl = document.getElementById('add-friend-error');
             
-            const db = getDB();
-            
-            if (modalAction === 'friend') {
-                const friend = Object.values(db.users).find(u => u.lower === val.toLowerCase());
-                if (!friend) { err.textContent = 'Пользователь не найден'; err.classList.remove('hidden'); return; }
-                if (friend.uid === me.uid) { err.textContent = 'Нельзя добавить себя'; err.classList.remove('hidden'); return; }
-                
-                const exists = Object.values(db.chats).find(c => c.type === 'direct' && c.participants.includes(me.uid) && c.participants.includes(friend.uid));
-                if (exists) {
-                    hideAllModals();
-                    selectChat(exists.id);
+            if (friendName === currentUser) {
+                errorEl.textContent = 'Нельзя добавить себя';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                // Ищем друга в базе
+                const userDoc = await db.collection('users').doc(friendName).get();
+                if (!userDoc.exists) {
+                    errorEl.textContent = 'Пользователь не найден';
+                    errorEl.classList.remove('hidden');
                     return;
                 }
+
+                // Проверяем, есть ли уже чат
+                const chatQuery = await db.collection('chats')
+                    .where('participants', 'array-contains', currentUser)
+                    .get();
                 
-                const id = 'chat_' + Date.now();
-                db.chats[id] = { id, type: 'direct', participants: [me.uid, friend.uid], createdAt: Date.now() };
-                saveDB(db);
-                hideAllModals();
-                selectChat(id);
+                let chatExists = false;
+                chatQuery.forEach(doc => {
+                    const data = doc.data();
+                    if (!data.isGroup && data.participants.includes(friendName)) {
+                        chatExists = true;
+                    }
+                });
+
+                if (chatExists) {
+                    errorEl.textContent = 'Чат уже существует';
+                    errorEl.classList.remove('hidden');
+                    return;
+                }
+
+                // Создаем новый чат
+                await db.collection('chats').add({
+                    isGroup: false,
+                    participants: [currentUser, friendName],
+                    name: 'Личный чат',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                closeModal('add-friend-modal');
+                document.getElementById('friend-username').value = '';
+                errorEl.classList.add('hidden');
                 
-            } else if (modalAction === 'group') {
-                const id = 'chat_' + Date.now();
-                db.chats[id] = { id, type: 'group', name: val, participants: [me.uid], createdAt: Date.now() };
-                saveDB(db);
-                hideAllModals();
-                selectChat(id);
+            } catch (error) {
+                console.error(error);
+                errorEl.textContent = 'Ошибка сети';
+                errorEl.classList.remove('hidden');
             }
-        });
-
-        document.getElementById('chat-header-btn').addEventListener('click', () => {
-            if (!currentChatId) return;
-            const db = getDB();
-            const chat = db.chats[currentChatId];
-            
-            const nameCont = document.getElementById('settings-name-container');
-            if (chat.type === 'group') {
-                nameCont.classList.remove('hidden');
-                document.getElementById('set-name').value = chat.name || '';
-            } else {
-                nameCont.classList.add('hidden');
-            }
-            
-            document.getElementById('set-photo').value = chat.avatar || '';
-            
-            const myColor = (chat.settings && chat.settings[me.uid] && chat.settings[me.uid].color) ? chat.settings[me.uid].color : '#4f46e5';
-            document.getElementById('set-color').value = myColor;
-            
-            document.getElementById('modal-settings').classList.remove('hidden');
-        });
-
-        document.getElementById('settings-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const db = getDB();
-            const chat = db.chats[currentChatId];
-            
-            if (chat.type === 'group') {
-                chat.name = document.getElementById('set-name').value.trim();
-            }
-            chat.avatar = document.getElementById('set-photo').value.trim();
-            
-            if (!chat.settings) chat.settings = {};
-            if (!chat.settings[me.uid]) chat.settings[me.uid] = {};
-            chat.settings[me.uid].color = document.getElementById('set-color').value;
-            
-            saveDB(db);
-            hideAllModals();
-            selectChat(currentChatId);
-        });
-
-        // Profile Modal
-        document.getElementById('open-profile-btn').addEventListener('click', () => {
-            document.getElementById('prof-avatar').textContent = me.nickname.charAt(0).toUpperCase();
-            document.getElementById('prof-name').textContent = me.nickname;
-            document.getElementById('prof-nick').textContent = me.nickname;
-            
-            document.getElementById('icon-copy').classList.remove('hidden');
-            document.getElementById('icon-copied').classList.add('hidden');
-
-            // Load current custom theme settings into modal
-            const currentTheme = loadAppearance() || { enabled: false, bg: '#1a202c', text: '#ffffff', font: "'Inter', sans-serif" };
-            const enableCheck = document.getElementById('theme-enable');
-            const controlsDiv = document.getElementById('custom-theme-controls');
-            
-            enableCheck.checked = currentTheme.enabled;
-            document.getElementById('theme-bg').value = currentTheme.bg || '#1a202c';
-            document.getElementById('theme-text').value = currentTheme.text || '#ffffff';
-            document.getElementById('theme-font').value = currentTheme.font || "'Inter', sans-serif";
-            
-            if (currentTheme.enabled) {
-                controlsDiv.classList.remove('hidden');
-            } else {
-                controlsDiv.classList.add('hidden');
-            }
-            
-            document.getElementById('modal-profile').classList.remove('hidden');
-        });
-
-        document.getElementById('theme-enable').addEventListener('change', (e) => {
-            document.getElementById('custom-theme-controls').classList.toggle('hidden', !e.target.checked);
-        });
-
-        document.getElementById('btn-save-theme').addEventListener('click', () => {
-            const settings = {
-                enabled: document.getElementById('theme-enable').checked,
-                bg: document.getElementById('theme-bg').value,
-                text: document.getElementById('theme-text').value,
-                font: document.getElementById('theme-font').value
-            };
-            localStorage.setItem(APP_THEME_KEY, JSON.stringify(settings));
-            applyAppearanceStyles(settings);
-            hideAllModals();
-        });
-
-        document.getElementById('btn-copy-nick').addEventListener('click', () => {
-            const text = me.nickname;
-            const success = () => {
-                document.getElementById('icon-copy').classList.add('hidden');
-                document.getElementById('icon-copied').classList.remove('hidden');
-                setTimeout(() => {
-                    document.getElementById('icon-copy').classList.remove('hidden');
-                    document.getElementById('icon-copied').classList.add('hidden');
-                }, 2000);
-            };
-
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(success);
-            } else {
-                const tx = document.createElement("textarea");
-                tx.value = text;
-                tx.style.position = "fixed"; tx.style.opacity = "0";
-                document.body.appendChild(tx);
-                tx.focus(); tx.select();
-                try { document.execCommand('copy'); success(); } catch(e){}
-                tx.remove();
-            }
-        });
-
-        // Sync from other tabs
-        window.addEventListener('storage', (e) => {
-            if (e.key === DB_KEY) syncUI();
-            if (e.key === APP_THEME_KEY) loadAppearance();
-        });
-        window.addEventListener('db_updated', () => {
-            syncUI();
-        });
-
-        function syncUI() {
-            if (!me) return;
-            renderChats();
-            if (currentChatId) renderMessages();
         }
 
-        // Utils
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        // ==========================================
+        // 6. ОТКРЫТИЕ ЧАТА И СООБЩЕНИЯ
+        // ==========================================
+        function openChat(chatId, chatName, avatarText) {
+            currentChatId = chatId;
+            document.getElementById('chat-header').classList.remove('hidden');
+            document.getElementById('message-input-area').classList.remove('hidden');
+            document.getElementById('current-chat-name').textContent = chatName;
+            document.getElementById('current-chat-avatar').textContent = avatarText;
+            
+            // Разблокируем поле ввода
+            const input = document.getElementById('message-input');
+            input.disabled = false;
+            input.focus();
+
+            loadChats(); // Обновляем выделение слева
+
+            // Отписываемся от старого чата
+            if (unsubscribeMessages) {
+                unsubscribeMessages();
+            }
+
+            // Слушаем новые сообщения
+            unsubscribeMessages = db.collection('chats').doc(chatId).collection('messages')
+                .orderBy('timestamp')
+                .onSnapshot(snapshot => {
+                    const container = document.getElementById('messages-container');
+                    container.innerHTML = '';
+                    
+                    snapshot.forEach(doc => {
+                        const msg = doc.data();
+                        const isMe = msg.sender === currentUser;
+                        
+                        const div = document.createElement('div');
+                        div.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
+                        
+                        // Применяем кастомный цвет для своих сообщений
+                        let bgColor = isMe ? `background-color: ${myCustomColor}; color: white;` : '';
+                        let classNames = isMe 
+                            ? `rounded-2xl rounded-tr-sm px-5 py-3 shadow-md max-w-[70%]` 
+                            : `bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-2xl rounded-tl-sm px-5 py-3 shadow-md max-w-[70%] border dark:border-gray-600`;
+
+                        div.innerHTML = `
+                            <div class="${classNames}" style="${bgColor}">
+                                ${!isMe ? `<div class="text-xs font-bold text-blue-500 mb-1">${msg.sender}</div>` : ''}
+                                <div class="break-words ${myCustomFont}">${msg.text}</div>
+                            </div>
+                        `;
+                        container.appendChild(div);
+                    });
+                    container.scrollTop = container.scrollHeight;
+                });
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (!text || !currentChatId) return;
+
+            input.value = '';
+            
+            await db.collection('chats').doc(currentChatId).collection('messages').add({
+                text: text,
+                sender: currentUser,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        // Отправка по Enter
+        document.getElementById('message-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // ==========================================
+        // 7. НАСТРОЙКИ ВНЕШНЕГО ВИДА И ТЕМЫ
+        // ==========================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        function applyTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        }
+
+        function applyCustomStyles() {
+            // Читаем из селекторов (если они открыты) или из памяти
+            const colorInput = document.getElementById('my-msg-color');
+            const fontInput = document.getElementById('font-selector');
+            
+            myCustomColor = colorInput.value;
+            myCustomFont = fontInput.value;
+            
+            localStorage.setItem('myMsgColor', myCustomColor);
+            localStorage.setItem('myFont', myCustomFont);
+            
+            // Применяем шрифт ко всему приложению
+            document.getElementById('app-body').className = 
+                `bg-gray-100 text-gray-900 h-screen overflow-hidden dark:bg-gray-900 dark:text-white ${myCustomFont}`;
+            
+            // Если открыт чат, перерисовываем сообщения чтобы цвет применился
+            if (currentChatId) {
+                openChat(currentChatId, document.getElementById('current-chat-name').textContent, document.getElementById('current-chat-avatar').textContent);
+            }
+        }
+
+        // Загружаем сохраненные настройки в элементы меню
+        window.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('myMsgColor')) {
+                document.getElementById('my-msg-color').value = localStorage.getItem('myMsgColor');
+            }
+            if (localStorage.getItem('myFont')) {
+                document.getElementById('font-selector').value = localStorage.getItem('myFont');
+            }
+            applyTheme();
+        });
+
+        // ==========================================
+        // 8. МОДАЛЬНЫЕ ОКНА И ПРОФИЛЬ
+        // ==========================================
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function openProfile() {
+            document.getElementById('profile-avatar-big').textContent = currentUser.substring(0, 2).toUpperCase();
+            document.getElementById('profile-name-big').textContent = currentUser;
+            document.getElementById('profile-copy-name').textContent = currentUser;
+            openModal('profile-modal');
+        }
+
+        function copyMyName() {
+            navigator.clipboard.writeText(currentUser);
+            const btn = document.querySelector('#profile-modal button i.fa-copy').parentElement;
+            const oldHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i>';
+            btn.classList.replace('bg-blue-600', 'bg-green-500');
+            setTimeout(() => {
+                btn.innerHTML = oldHtml;
+                btn.classList.replace('bg-green-500', 'bg-blue-600');
+            }, 2000);
         }
     </script>
 </body>
